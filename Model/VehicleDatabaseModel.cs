@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
 namespace ImportData.Model
 {
+
     public class VehicleDatabaseModel
     {
         public int Id { get; set; }

@@ -2,6 +2,7 @@
 using CsvHelper.Configuration;
 using Dapper;
 using ImportData.Model;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -9,6 +10,7 @@ using System.Data.SqlClient;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace ImportData
 {
@@ -17,11 +19,14 @@ namespace ImportData
         static void Main(string[] args)
         {
             Console.WriteLine("Début de l'importation");
-
+            var garageId = 5587;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
             var vehicles = GetVehicles();
+            Console.WriteLine("Obtenir les historique du fichier csv");
+            var historiques = GetHistoriques();
+
             //Console.WriteLine("Obtenir les produits du fichier csv");
             //var products = GetProducts();
 
@@ -29,11 +34,17 @@ namespace ImportData
             Console.WriteLine("*** Importation des clients et véhicule ***");
             Console.WriteLine("********************************************");
 
-            ImportVehiculeClient(vehicles, clients);
+            ImportVehiculeClient(garageId, 2492, vehicles, clients, historiques);
 
             Console.WriteLine("********************************************");
-            Console.WriteLine("*** Importation des produits             ***");
+            Console.WriteLine("*** Importation des historiques             ***");
             Console.WriteLine("********************************************");
+
+            // ImportHistoriques(garageId, historiques);
+
+            //Console.WriteLine("********************************************");
+            //Console.WriteLine("*** Importation des produits             ***");
+            //Console.WriteLine("********************************************");
 
             //ImportProducts(products);
 
@@ -79,10 +90,63 @@ namespace ImportData
         //    }
         //}
 
-        public static void ImportVehiculeClient(IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients)
+        private static WorkOrderDatabaseModel GetHistoVehicule(IEnumerable<HistoriqueModel> historique, IEnumerable<MaintenanceTypeModel> plans, int garageId)
+        {
+            var wordOrderDetail = new StringBuilder();
+            var wodList = new List<WorkOrderDetailDatabaseModel>();
+
+            var result = new WorkOrderDatabaseModel()
+            { 
+                CreateDate = historique.FirstOrDefault().Date,
+                VinCode = historique.FirstOrDefault().VinCode,
+                GarageId = garageId,
+                Status = 2,
+                Mileage = historique.FirstOrDefault().Odometer
+            };
+
+            historique.ToList().ForEach(h =>
+            {
+                //if maintenanceType not found, do not add
+                var maintenanceTypeId = plans.FirstOrDefault(p => p.Code.Trim().ToUpper() == h.Type.Trim().ToUpper());
+
+                if (maintenanceTypeId != null)
+                {
+                    wodList.Add(new WorkOrderDetailDatabaseModel()
+                    {
+                        DateDone = h.Date,
+                        MaintenanceTypeId = maintenanceTypeId.Id,
+                        MileageDone = h.Odometer,
+                        WorkDone = true
+                    });
+                }
+            });
+
+            wordOrderDetail.Append(JsonConvert.SerializeObject(wodList));
+            result.WorkOrderDetail = wordOrderDetail.ToString();
+            return result;
+        }
+
+        public static void ImportVehiculeClient(int garageId, int maintenancePlanId, IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients, IEnumerable<HistoriqueModel> historiques)
         {
             try
             {
+                var sqlPlan = "SELECT [Id],[Code] FROM [dbo].[MaintenanceType2] where GarageId = @GarageId";
+
+                var sqlWorkOrder = @"INSERT INTO [dbo].[WorkOrder]
+                           ([CreateDate]
+                           ,[Vincode]
+                           ,[Mileage]
+                           ,[Status]
+                           ,[WorkOrderDetail]
+                           ,[GarageId])
+                     VALUES
+                           (@CreateDate
+                           ,@Vincode
+                           ,@Mileage
+                           ,@Status
+                           ,@WorkOrderDetail
+                           ,@GarageId)";
+
                 var sqlOwner = @"INSERT INTO [dbo].[VehicleOwner]
                                 ([Company] 
                                 ,[Name]
@@ -158,6 +222,8 @@ namespace ImportData
 
                     using (var transaction = connection.BeginTransaction())
                     {
+                        var plans = connection.Query<MaintenanceTypeModel>(sqlPlan, new { GarageId = garageId }, commandType: CommandType.Text, transaction: transaction);
+
                         foreach (var client in clients)
                         {
                             //insert owner
@@ -169,7 +235,7 @@ namespace ImportData
                                     OwnerAddress = client.Adresse,
                                     OwnerPhone = client.Phone,
                                     OwnerEmail = client.Email,
-                                    GarageId = 5496
+                                    GarageId = garageId
 
                                 },
                                 commandType: CommandType.Text,
@@ -182,6 +248,7 @@ namespace ImportData
                             if (clientVehicule.Any())
                             {
                                 var vehlist = new List<VehicleDatabaseModel>();
+                                var historyList = new List<WorkOrderDatabaseModel>();
 
                                 clientVehicule.ForEach(p =>
                                 {
@@ -208,14 +275,31 @@ namespace ImportData
                                         EntryDate = new DateTime(p.Year, 6, 1).ToString("yyyy-MM-dd"),
                                         MonthlyMileage = p.MonthlyMileage,
                                         OilTypeId = 0,
-                                        MaintenancePlanId = 0,
+                                        MaintenancePlanId = maintenancePlanId,
                                         VehicleOwnerId = OwnerInserted,
                                         VehicleDriverId = 0,
-                                        GarageId = 5496
+                                        GarageId = garageId
                                     });
+
+                                    Console.WriteLine($"Traitement des historiques du vehicule {p.Description}");
+                                    var vehHisto = historiques.Where(h => h.VinCode == p.VinCode);
+
+                                    if (vehHisto.Any())
+                                    {
+                                        //Group by Date
+                                        var histoGrouped = vehHisto.GroupBy(p => p.Date.Date);
+
+                                        histoGrouped.ToList().ForEach(hist =>
+                                        {
+                                            historyList.Add(GetHistoVehicule(hist, plans, garageId));
+
+                                        });
+                                    }
                                 });
 
                                 var affectedRows = connection.Execute(sql, vehlist, transaction: transaction);
+                                var affectedWORows = connection.Execute(sqlWorkOrder, historyList, transaction: transaction);
+
                             }
 
                         }
@@ -238,7 +322,7 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\PMSA\\produits.csv"))
+            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\produits.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var vehicules = csv.GetRecords<ProductModel>();
@@ -253,11 +337,28 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\PMSA\\vehicule.csv"))
+            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\vehicules.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var vehicules = csv.GetRecords<VehicleModel>();
                 return vehicules.ToList();
+            }
+        }
+
+        private static IEnumerable<HistoriqueModel> GetHistoriques()
+        {
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                PrepareHeaderForMatch = args => args.Header.ToLower(),
+                TrimOptions = TrimOptions.Trim
+            };
+
+            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Maintenances.csv"))
+            using (var csv = new CsvReader(reader, config))
+            {
+                csv.Context.RegisterClassMap<TransactionLineMap>();
+                var histo = csv.GetRecords<HistoriqueModel>();
+                return histo.ToList();
             }
         }
 
@@ -268,7 +369,7 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\PMSA\\Clients.csv"))
+            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Clients.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var clients = csv.GetRecords<ClientModel>();
@@ -276,5 +377,18 @@ namespace ImportData
             }
         }
 
+    }
+
+    internal class TransactionLineMap : ClassMap<HistoriqueModel>
+    {
+        public TransactionLineMap()
+        {
+            Map(m => m.Odometer);
+            Map(m => m.VinCode);
+            Map(m => m.Type);
+            Map(m => m.Date)
+                .TypeConverter<CsvHelper.TypeConversion.DateTimeConverter>()
+                .TypeConverterOption.Format("dd-MM-yy");
+        }
     }
 }

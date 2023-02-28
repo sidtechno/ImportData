@@ -10,4 +10,12 @@ namespace ImportData.Model
         public int Odometer { get; set; }
 
     }
+
+    public class HistoriqueFixModel
+    {
+        public string VinCode { get; set; }
+        public DateTime Date { get; set; }
+        public int Odometer { get; set; }
+
+    }
 }

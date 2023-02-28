@@ -26,6 +26,7 @@ namespace ImportData
             var vehicles = GetVehicles();
             Console.WriteLine("Obtenir les historique du fichier csv");
             var historiques = GetHistoriques();
+            var fix1 = GetHistoriquesFix1();
 
             //Console.WriteLine("Obtenir les produits du fichier csv");
             //var products = GetProducts();
@@ -34,7 +35,7 @@ namespace ImportData
             Console.WriteLine("*** Importation des clients et véhicule ***");
             Console.WriteLine("********************************************");
 
-            ImportVehiculeClient(garageId, 2492, vehicles, clients, historiques);
+            ImportVehiculeClient(garageId, 2492, vehicles, clients, historiques, fix1);
 
             Console.WriteLine("********************************************");
             Console.WriteLine("*** Importation des historiques             ***");
@@ -96,7 +97,7 @@ namespace ImportData
             var wodList = new List<WorkOrderDetailDatabaseModel>();
 
             var result = new WorkOrderDatabaseModel()
-            { 
+            {
                 CreateDate = historique.FirstOrDefault().Date,
                 VinCode = historique.FirstOrDefault().VinCode,
                 GarageId = garageId,
@@ -126,11 +127,52 @@ namespace ImportData
             return result;
         }
 
-        public static void ImportVehiculeClient(int garageId, int maintenancePlanId, IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients, IEnumerable<HistoriqueModel> historiques)
+        public static void ImportVehiculeClient(int garageId, int baseMaintenancePlanId, IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients, IEnumerable<HistoriqueModel> historiques, IEnumerable<HistoriqueFixModel> fix1)
         {
             try
             {
-                var sqlPlan = "SELECT [Id],[Code] FROM [dbo].[MaintenanceType2] where GarageId = @GarageId";
+                var sqlPlanType = "SELECT [Id],[Code] FROM [dbo].[MaintenanceType2] where GarageId = @GarageId";
+
+                var sqlMaintenanceDetailPlanBase = @"SELECT MP.[Id]
+	                    ,MT2.[Code]
+                        ,MP.[MaintenancePlanId]
+                        ,MP.[MaintenanceTypeId]
+                        ,MP.[Interval]
+                        ,MP.[Km]
+                        ,MP.[Miles]
+                        ,MP.[LastServiceDate]
+                        ,MP.[LastServiceMileage]
+                    FROM [dbo].[MaintenancePlanDetail2] MP
+                    INNER JOIN MaintenanceType2 MT2
+                    ON MT2.Id = MP.MaintenanceTypeId
+                    WHERE MaintenancePlanId = @baseMPID";
+
+                var sqlCreateMaintenancePlan = @"INSERT INTO [dbo].[MaintenancePlan2]
+                            ([Name]
+                            ,[GarageId]
+                            ,[IsTemplate])
+                        OUTPUT INSERTED.Id
+                        VALUES
+                            (@Name
+                            ,@GarageId
+                            ,@IsTemplate)";
+
+                var sqlCreateMaintenancePlanDetail = @"INSERT INTO [dbo].[MaintenancePlanDetail2]
+                       ([MaintenancePlanId]
+                       ,[MaintenanceTypeId]
+                       ,[Interval]
+                       ,[Km]
+                       ,[Miles]
+                       ,[LastServiceDate]
+                       ,[LastServiceMileage])
+                 VALUES
+                       (@MaintenancePlanId
+                       ,@MaintenanceTypeId
+                       ,@Interval
+                       ,@Km
+                       ,@Miles
+                       ,@LastServiceDate
+                       ,@LastServiceMileage)";
 
                 var sqlWorkOrder = @"INSERT INTO [dbo].[WorkOrder]
                            ([CreateDate]
@@ -222,9 +264,10 @@ namespace ImportData
 
                     using (var transaction = connection.BeginTransaction())
                     {
-                        var plans = connection.Query<MaintenanceTypeModel>(sqlPlan, new { GarageId = garageId }, commandType: CommandType.Text, transaction: transaction);
+                        var plans = connection.Query<MaintenanceTypeModel>(sqlPlanType, new { GarageId = garageId }, commandType: CommandType.Text, transaction: transaction);
+                        var basePlanDetail = connection.Query<MaintenancePlanDetailModel>(sqlMaintenanceDetailPlanBase, new { baseMPID = baseMaintenancePlanId }, commandType: CommandType.Text, transaction: transaction);
 
-                        foreach (var client in clients)
+                        foreach (var client in clients.Skip(10))
                         {
                             //insert owner
                             var OwnerInserted = connection.QuerySingle<int>(sqlOwner,
@@ -252,6 +295,58 @@ namespace ImportData
 
                                 clientVehicule.ForEach(p =>
                                 {
+
+                                    Console.WriteLine($"Traitement des historiques du vehicule {p.Description}");
+                                    var vehHisto = historiques.Where(h => h.VinCode == p.VinCode);
+                                    var maintenancePlanInserted = 0;
+
+                                    if (vehHisto.Any())
+                                    {
+                                        //insert maintenance plan
+                                        maintenancePlanInserted = connection.QuerySingle<int>(sqlCreateMaintenancePlan,
+                                            new
+                                            {
+                                                Name = vehHisto.FirstOrDefault().VinCode,
+                                                GarageId = garageId,
+                                                IsTemplate = 0
+
+                                            },
+                                            commandType: CommandType.Text,
+                                            transaction: transaction);
+
+                                        //Group by Date
+                                        var histoGrouped = vehHisto.GroupBy(p => p.Date.Date);
+                                        var maintenanceDetailToInsert = new List<MaintenancePlanDetailModel>();
+
+                                        histoGrouped.ToList().ForEach(hist =>
+                                        {
+                                            historyList.Add(GetHistoVehicule(hist, plans, garageId));
+                                        });
+
+                                        basePlanDetail.ToList().ForEach(basem =>
+                                        {
+                                            var mpdm = new MaintenancePlanDetailModel()
+                                            {
+                                                MaintenancePlanId = maintenancePlanInserted,
+                                                MaintenanceTypeId = basem.MaintenanceTypeId,
+                                                Interval = basem.Interval,
+                                                Km = basem.Km,
+                                                Miles = basem.Miles
+                                            };
+
+                                            if (vehHisto.Any(h => h.Type == basem.Code))
+                                            {
+                                                var histSingle = vehHisto.First(d => d.Type == basem.Code);
+                                                mpdm.LastServiceDate = histSingle.Date.ToString("yyyy-MM-dd");
+                                                mpdm.LastServiceMileage = histSingle.Odometer;
+                                            }
+
+                                            maintenanceDetailToInsert.Add(mpdm);
+                                        });
+
+                                        var affectedMPD = connection.Execute(sqlCreateMaintenancePlanDetail, maintenanceDetailToInsert, transaction: transaction);
+                                    }
+
                                     Console.WriteLine($"Traitement du vehicule {p.Description}");
 
                                     vehlist.Add(new VehicleDatabaseModel()
@@ -270,36 +365,21 @@ namespace ImportData
                                         UnitNo = p.UnitNo.Length > 25 ? p.UnitNo.Substring(0, 25) : p.UnitNo,
                                         LicencePlate = p.Licence.Length > 12 ? p.Licence.Substring(0, 12) : p.Licence,
                                         Seating = p.Seating,
-                                        Odometer = p.Odometer,
+                                        Odometer = fix1.Any(f => f.VinCode == p.VinCode) ? fix1.First(f => f.VinCode == p.VinCode).Odometer : p.Odometer,
                                         SelectedUnit = p.SelectedUnit.Length > 2 ? p.SelectedUnit.Substring(0, 2) : p.SelectedUnit,
                                         EntryDate = new DateTime(p.Year, 6, 1).ToString("yyyy-MM-dd"),
                                         MonthlyMileage = p.MonthlyMileage,
                                         OilTypeId = 0,
-                                        MaintenancePlanId = maintenancePlanId,
+                                        MaintenancePlanId = maintenancePlanInserted,
                                         VehicleOwnerId = OwnerInserted,
                                         VehicleDriverId = 0,
                                         GarageId = garageId
                                     });
 
-                                    Console.WriteLine($"Traitement des historiques du vehicule {p.Description}");
-                                    var vehHisto = historiques.Where(h => h.VinCode == p.VinCode);
-
-                                    if (vehHisto.Any())
-                                    {
-                                        //Group by Date
-                                        var histoGrouped = vehHisto.GroupBy(p => p.Date.Date);
-
-                                        histoGrouped.ToList().ForEach(hist =>
-                                        {
-                                            historyList.Add(GetHistoVehicule(hist, plans, garageId));
-
-                                        });
-                                    }
                                 });
 
                                 var affectedRows = connection.Execute(sql, vehlist, transaction: transaction);
                                 var affectedWORows = connection.Execute(sqlWorkOrder, historyList, transaction: transaction);
-
                             }
 
                         }
@@ -362,6 +442,23 @@ namespace ImportData
             }
         }
 
+        private static IEnumerable<HistoriqueFixModel> GetHistoriquesFix1()
+        {
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                PrepareHeaderForMatch = args => args.Header.ToLower(),
+                TrimOptions = TrimOptions.Trim
+            };
+
+            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Histo fix1.csv"))
+            using (var csv = new CsvReader(reader, config))
+            {
+                csv.Context.RegisterClassMap<TransactionFixLineMap>();
+                var histo = csv.GetRecords<HistoriqueFixModel>();
+                return histo.ToList();
+            }
+        }
+
         private static IEnumerable<ClientModel> GetClients()
         {
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -386,6 +483,18 @@ namespace ImportData
             Map(m => m.Odometer);
             Map(m => m.VinCode);
             Map(m => m.Type);
+            Map(m => m.Date)
+                .TypeConverter<CsvHelper.TypeConversion.DateTimeConverter>()
+                .TypeConverterOption.Format("dd-MM-yy");
+        }
+    }
+
+    internal class TransactionFixLineMap : ClassMap<HistoriqueFixModel>
+    {
+        public TransactionFixLineMap()
+        {
+            Map(m => m.Odometer);
+            Map(m => m.VinCode);
             Map(m => m.Date)
                 .TypeConverter<CsvHelper.TypeConversion.DateTimeConverter>()
                 .TypeConverterOption.Format("dd-MM-yy");

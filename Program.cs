@@ -16,16 +16,18 @@ namespace ImportData
 {
     class Program
     {
+        const string garageName = "RDL Mitsubishi";
+
         static void Main(string[] args)
         {
             Console.WriteLine("Début de l'importation");
-            var garageId = 5581;
+            var garageId = 5649;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
             var vehicles = GetVehicles();
             //Console.WriteLine("Obtenir les historique du fichier csv");
-            //var historiques = GetHistoriques();
+           // var historiques = GetHistoriques();
             //var fix1 = GetHistoriquesFix1();
 
             //Console.WriteLine("Obtenir les produits du fichier csv");
@@ -36,13 +38,13 @@ namespace ImportData
             Console.WriteLine("********************************************");
 
             ImportVehiculeClient(garageId, vehicles, clients);
-            //ImportVehiculeClientWithMaintenance(garageId, 2492, vehicles, clients, historiques, fix1);
+            //ImportVehiculeClientWithMaintenance(garageId, 5631, vehicles, clients, historiques);
 
             Console.WriteLine("********************************************");
             Console.WriteLine("*** Importation des historiques             ***");
             Console.WriteLine("********************************************");
 
-            // ImportHistoriques(garageId, historiques);
+             //ImportHistoriques(garageId, historiques);
 
             //Console.WriteLine("********************************************");
             //Console.WriteLine("*** Importation des produits             ***");
@@ -282,10 +284,13 @@ namespace ImportData
             }
         }
 
-        public static void ImportVehiculeClientWithMaintenance(int garageId, int baseMaintenancePlanId, IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients, IEnumerable<HistoriqueModel> historiques, IEnumerable<HistoriqueFixModel> fix1)
+        public static void ImportVehiculeClientWithMaintenance(int garageId, int baseMaintenancePlanId, IEnumerable<VehicleModel> vehicles, IEnumerable<ClientModel> clients, IEnumerable<HistoriqueModel> historiques, IEnumerable<HistoriqueFixModel>? fix1 = null)
         {
             try
             {
+                if (fix1 == null)
+                    fix1 = new List<HistoriqueFixModel>();
+
                 var sqlPlanType = "SELECT [Id],[Code] FROM [dbo].[MaintenanceType2] where GarageId = @GarageId";
 
                 var sqlMaintenanceDetailPlanBase = @"SELECT MP.[Id]
@@ -557,7 +562,7 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\produits.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\produits.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var vehicules = csv.GetRecords<ProductModel>();
@@ -572,7 +577,7 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\vehicules.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\vehicles.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var vehicules = csv.GetRecords<VehicleModel>();
@@ -588,7 +593,7 @@ namespace ImportData
                 TrimOptions = TrimOptions.Trim
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Maintenances.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\Maintenance2.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 csv.Context.RegisterClassMap<TransactionLineMap>();
@@ -605,7 +610,7 @@ namespace ImportData
                 TrimOptions = TrimOptions.Trim
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Histo fix1.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\Histo fix1.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 csv.Context.RegisterClassMap<TransactionFixLineMap>();
@@ -621,7 +626,7 @@ namespace ImportData
                 PrepareHeaderForMatch = args => args.Header.ToLower(),
             };
 
-            using (var reader = new StreamReader("C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\Mazda-Drummondville\\Clients.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\Clients.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 var clients = csv.GetRecords<ClientModel>();

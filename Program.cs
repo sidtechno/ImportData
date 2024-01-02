@@ -16,12 +16,12 @@ namespace ImportData
 {
     class Program
     {
-        const string garageName = "RDL Mitsubishi";
+        const string garageName = "Chartrand St-Jean";
 
         static void Main(string[] args)
         {
             Console.WriteLine("Début de l'importation");
-            var garageId = 5649;
+            var garageId = 5669;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
@@ -211,6 +211,13 @@ namespace ImportData
                     {
                         foreach (var client in clients)
                         {
+                            // Check if client.Phone starts with "+1"
+                            if (client.Phone.StartsWith("+1"))
+                            {
+                                // Remove the "+1" prefix
+                                client.Phone = client.Phone.Substring(2);
+                            }
+
                             //insert owner
                             var OwnerInserted = connection.QuerySingle<int>(sqlOwner,
                                 new
@@ -218,7 +225,7 @@ namespace ImportData
                                     OwnerCompany = client.Compagnie,
                                     OwnerName = client.Nom,
                                     OwnerAddress = client.Adresse,
-                                    OwnerPhone = client.Phone,
+                                    OwnerPhone =  client.Phone,
                                     OwnerEmail = client.Email,
                                     GarageId = garageId
 

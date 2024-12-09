@@ -13,6 +13,7 @@ namespace ImportData.Model
         public string Phone { get; set; }
         public string Email { get; set; }
 
+        public string Import_Id { get; set; } = "";
 
     }
 }

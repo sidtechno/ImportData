@@ -16,13 +16,13 @@ namespace ImportData
 {
     class Program
     {
-        const string garageName = "TEST VITRACC";
-        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2_Dev;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
+        const string garageName = "VITRACC 2";
+        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
 
         static void Main(string[] args)
         {
             Console.WriteLine("Début de l'importation");
-            var garageId = 5742;
+            var garageId = 5769;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
@@ -38,13 +38,13 @@ namespace ImportData
             Console.WriteLine("*** Importation des clients              ***");
             Console.WriteLine("********************************************");
 
-            ImportOwners(garageId, clients, 250);
+            //ImportOwners(garageId, clients, 250);
             Console.WriteLine("Fin de l'importation des clients");
 
             Console.WriteLine("********************************************");
             Console.WriteLine("*** Importation des véhicules            ***");
             Console.WriteLine("********************************************");
-            ImportVehicles(garageId, vehicles, 75);
+            //ImportVehicles(garageId, vehicles, 75);
             Console.WriteLine("Fin de l'importation des véhicules");
 
             Console.WriteLine("********************************************");
@@ -364,7 +364,7 @@ namespace ImportData
        
         private static Dictionary<string, int> GetVehicleOwnerIdMappings(int garageId)
         {
-            var query = $"SELECT Import_Id, Id FROM VehicleOwner WHERE GarageId = {garageId}";
+            var query = $"SELECT Import_Id, Id FROM VehicleOwner WHERE GarageId = {garageId} AND Import_Id IS NOT NULL";
             using (var connection = new SqlConnection(connectionString))
             {
                 var result = connection.Query<(string ImportId, int Id)>(query);

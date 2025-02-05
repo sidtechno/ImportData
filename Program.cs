@@ -16,13 +16,13 @@ namespace ImportData
 {
     class Program
     {
-        const string garageName = "VITRACC 2";
+        const string garageName = "Ste-Dorothee";
         const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
 
         static void Main(string[] args)
         {
             Console.WriteLine("Début de l'importation");
-            var garageId = 5769;
+            var garageId = 5573;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
@@ -759,7 +759,7 @@ namespace ImportData
                 ShouldSkipRecord = record => string.IsNullOrWhiteSpace(record.Record[0]?.Trim())
             };
 
-            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\historique.csv"))
+            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\historiques.csv"))
             using (var csv = new CsvReader(reader, config))
             {
                 csv.Context.RegisterClassMap<TransactionLineMap>();

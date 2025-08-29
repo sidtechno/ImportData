@@ -10,25 +10,28 @@ using System.Data.SqlClient;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ImportData
 {
     class Program
     {
-        const string garageName = "Ste-Dorothee";
-        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
+        const string garageName = "AD Leblanc";
+        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2_Dev;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
 
         static void Main(string[] args)
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
             Console.WriteLine("Début de l'importation");
-            var garageId = 5573;
+            var garageId = 5853;
             Console.WriteLine("Obtenir les clients du fichier csv");
             var clients = GetClients();
             Console.WriteLine("Obtenir les vehicules du fichier csv");
             var vehicles = GetVehicles();
             Console.WriteLine("Obtenir les historique du fichier csv");
-            var historiques = GetHistoriques();
+            //var historiques = GetHistoriques();
             //var fix1 = GetHistoriquesFix1();
 
             //Console.WriteLine("Obtenir les produits du fichier csv");
@@ -38,20 +41,20 @@ namespace ImportData
             Console.WriteLine("*** Importation des clients              ***");
             Console.WriteLine("********************************************");
 
-            //ImportOwners(garageId, clients, 250);
+            ImportOwners(garageId, clients, 250);
             Console.WriteLine("Fin de l'importation des clients");
 
             Console.WriteLine("********************************************");
             Console.WriteLine("*** Importation des véhicules            ***");
             Console.WriteLine("********************************************");
-            //ImportVehicles(garageId, vehicles, 75);
+            ImportVehicles(garageId, vehicles, 75);
             Console.WriteLine("Fin de l'importation des véhicules");
 
             Console.WriteLine("********************************************");
             Console.WriteLine("*** Importation des historiques             ***");
             Console.WriteLine("********************************************");
 
-            ImportHistoriques(garageId, historiques, vehicles);
+            //ImportHistoriques(garageId, historiques, vehicles);
             Console.WriteLine("Fin de l'importation des historiques");
 
             //Console.WriteLine("********************************************");
@@ -304,19 +307,19 @@ namespace ImportData
                             var parameters = new DynamicParameters();
                             for (int i = 0; i < batch.Count; i++)
                             {
-                                parameters.Add($"@Vincode{i}", batch[i].VinCode);
-                                parameters.Add($"@Description{i}", batch[i].Description);
+                                parameters.Add($"@Vincode{i}", batch[i].VinCode.Length > 20 ? batch[i].VinCode.Substring(0, 20) : batch[i].VinCode); 
+                                parameters.Add($"@Description{i}", batch[i].Description.Length > 200 ? batch[i].Description.Substring(200) : batch[i].Description);
                                 parameters.Add($"@Year{i}", batch[i].Year);
-                                parameters.Add($"@Make{i}", batch[i].Make);
-                                parameters.Add($"@Model{i}", batch[i].Model);
-                                parameters.Add($"@Engine{i}", batch[i].Engine);
-                                parameters.Add($"@Transmission{i}", batch[i].Transmission);
-                                parameters.Add($"@Propulsion{i}", batch[i].Propulsion);
-                                parameters.Add($"@BrakeSystem{i}", batch[i].BrakeSystem);
-                                parameters.Add($"@Steering{i}", batch[i].Steering);
-                                parameters.Add($"@Color{i}", batch[i].Color);
-                                parameters.Add($"@UnitNo{i}", batch[i].UnitNo);
-                                parameters.Add($"@LicencePlate{i}", batch[i].Licence);
+                                parameters.Add($"@Make{i}", batch[i].Make.Length > 75 ? batch[i].Make.Substring(75) : batch[i].Make);
+                                parameters.Add($"@Model{i}", batch[i].Model.Length > 75 ? batch[i].Model.Substring(75) : batch[i].Model);
+                                parameters.Add($"@Engine{i}", batch[i].Engine.Length > 75 ? batch[i].Engine.Substring(75) : batch[i].Engine);
+                                parameters.Add($"@Transmission{i}", batch[i].Transmission.Length > 75 ? batch[i].Transmission.Substring(75) : batch[i].Transmission);
+                                parameters.Add($"@Propulsion{i}", batch[i].Propulsion.Length > 75 ? batch[i].Propulsion.Substring(75) : batch[i].Propulsion);
+                                parameters.Add($"@BrakeSystem{i}", batch[i].BrakeSystem.Length > 75 ? batch[i].BrakeSystem.Substring(75) : batch[i].BrakeSystem);
+                                parameters.Add($"@Steering{i}", batch[i].Steering.Length > 75 ? batch[i].Steering.Substring(75) : batch[i].Steering);
+                                parameters.Add($"@Color{i}", batch[i].Color.Length > 75 ? batch[i].Color.Substring(75) : batch[i].Color);
+                                parameters.Add($"@UnitNo{i}", batch[i].UnitNo.Length > 25 ? batch[i].UnitNo.Substring(0, 25) : batch[i].UnitNo);
+                                parameters.Add($"@LicencePlate{i}", batch[i].Licence.Length > 12 ? batch[i].Licence.Substring(0, 25) : batch[i].Licence);
                                 parameters.Add($"@Seating{i}", batch[i].Seating);
                                 parameters.Add($"@Odometer{i}", batch[i].Odometer);
                                 parameters.Add($"@SelectedUnit{i}", batch[i].SelectedUnit);
@@ -426,7 +429,7 @@ namespace ImportData
                             !string.IsNullOrWhiteSpace(p.VinCode)).Select(p => p.VinCode)
                         .ToList();
 
-                    var tt = vinCodes.Where(p => p == "JF1GPAA67CG241719");
+                    //var tt = vinCodes.Where(p => p == "JF1GPAA67CG241719");
                     filteredEntretiens = filteredEntretiens.Where(p => vinCodes.Contains(p.VinCode)).ToList();
                      
                     var resultGroupedByVin = filteredEntretiens
@@ -740,7 +743,10 @@ namespace ImportData
                 ShouldSkipRecord = record => string.IsNullOrWhiteSpace(record.Record[0]?.Trim()) || string.IsNullOrWhiteSpace(record.Record[1]?.Trim())
             };
 
-            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\vehicules.csv"))
+            using (var reader = new StreamReader(
+                   $"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\vehicules.csv",
+                   Encoding.GetEncoding("Windows-1252")))
+
             using (var csv = new CsvReader(reader, config))
             {
                 csv.Context.RegisterClassMap<VehicleMap>();
@@ -795,7 +801,10 @@ namespace ImportData
                 ShouldSkipRecord = record => string.IsNullOrWhiteSpace(record.Record[0]?.Trim()) || string.IsNullOrWhiteSpace(record.Record[1]?.Trim())
             };
 
-            using (var reader = new StreamReader($"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\Clients.csv"))
+            using (var reader = new StreamReader(
+                   $"C:\\Projects\\GSOLPRO\\OchPlanner3-Importation\\{garageName}\\Clients.csv",
+                   Encoding.GetEncoding("Windows-1252"))) 
+
             using (var csv = new CsvReader(reader, config))
             {
                 csv.Context.RegisterClassMap<ClientMap>();
@@ -890,6 +899,10 @@ namespace ImportData
             if (DateTime.TryParseExact(text, "dd/MM/yy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
                 return date.ToString("yyyy-MM-dd");
+            }
+            else if(DateTime.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date2))
+            {
+                return date2.ToString("yyyy-MM-dd");
             }
             return null;
         }

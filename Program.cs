@@ -17,8 +17,8 @@ namespace ImportData
 {
     class Program
     {
-        const string garageName = "AD Leblanc";
-        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2_Dev;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
+        const string garageName = "AD Leblanc2";
+        const string connectionString = "Data Source=tcp:s8ch2o0eft.database.windows.net,1433;Initial Catalog=OCHPlanner2;User ID=mecanimax@s8ch2o0eft;Password=Mecan1m@x;Trusted_Connection=False;";
 
         static void Main(string[] args)
         {
